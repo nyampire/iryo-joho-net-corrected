@@ -99,3 +99,42 @@ def fix_url(value, label):
     if RE_BARE_DOMAIN.match(v):
         return value, f"疑い: {label} {value}（スキームが無い）"
     return value, f"疑い: {label} {value}（URL として読めない形式）"
+
+
+# build_addr.js と fix_placeholder_coords.js が 座標の理由 に書く文から、理由の句を取り出す
+RE_COORD_REASON = re.compile(r"^元データの座標 [-\d.]+, [-\d.]+ [がを](.+?)ため")
+
+
+def coord_reason(raw_lat, raw_lon, geo):
+    """元データの座標を使わない理由を、句点を含まない句で返す。"""
+    if float(raw_lat or 0) == 0 or float(raw_lon or 0) == 0:
+        return "欠損を示す値"
+    text = geo.get("座標の理由", "")
+    m = RE_COORD_REASON.match(text)
+    if not m:
+        raise ValueError(f"座標を置き換える理由が読めません: {geo['ID']} {text!r}")
+    # 「1度の格子に乗る丸め値のため」の「の」は、ためにつなぐための語なので落とす
+    return m.group(1).replace("ジオコーダ座標", "住所の点").removesuffix("の")
+
+
+def decide_coord(raw_lat, raw_lon, geo, chiban):
+    """座標を決める。(緯度, 経度, 座標の出典, 注記) を返す。
+
+    置き換えるかどうかは既存の処理の判定（geocoded.csv の 座標の出典）に従う。
+    置き換え先は位置レベル8の点だけで、住居表示の点を先に使う。
+    geocoded.csv の 住所_位置レベル が8の点は、nja-osm-tags が地番の点を返さないので
+    住居表示の点に限られる。
+    """
+    if geo["座標の出典"] == "原データ":
+        return raw_lat, raw_lon, "原データ", ""
+    why = coord_reason(raw_lat, raw_lon, geo)
+    if geo["住所_位置レベル"] == "8" and geo["住所_lat"] and geo["住所_lon"]:
+        lat, lon = geo["住所_lat"], geo["住所_lon"]
+        return lat, lon, "住居表示", (f"書き換えた: 緯度経度 {raw_lat}, {raw_lon} → "
+                                    f"住居表示の点 {lat}, {lon}（{why}）")
+    if chiban:
+        lat, lon = chiban
+        return lat, lon, "地番", (f"書き換えた: 緯度経度 {raw_lat}, {raw_lon} → "
+                                f"地番の点 {lat}, {lon}（{why}）")
+    return "", "", "", (f"空欄にした: 緯度経度 {raw_lat}, {raw_lon}"
+                        f"（{why}。位置レベル8の住所の点が無い）")
