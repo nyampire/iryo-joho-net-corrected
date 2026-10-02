@@ -34,6 +34,10 @@ RE_RAW = re.compile(r"^0\d(-\d)?_[a-z_]+_\d{8}\.csv$")
 RE_TIME_COL = re.compile(r"^[月火水木金土日祝]_.+時間$")
 # 1ファイルで同じ種類の問題をいくつまで書き出すか。全件は件数だけ数える
 MAX_PER_KIND = 20
+# 県の矩形は町字の代表点を囲んだもので、県の実際の範囲より小さい。
+# 県の端にある施設の正しい点が外に出るので、上下左右に広げてから判定する。
+# 2026-10-02 の実データでは、地番の点2,873件のうち2件が最大0.079度はみ出した。
+BBOX_MARGIN = 0.1
 
 
 def editable(col):
@@ -116,7 +120,8 @@ def check_coord(name, raw, out, ri, bbox, problems):
     if source == "地番" and lat and lon:
         box = bbox.get(raw[ri["都道府県コード"]])
         y, x = float(lat), float(lon)
-        if box is None or not (box[0] <= y <= box[1] and box[2] <= x <= box[3]):
+        if box is None or not (box[0] - BBOX_MARGIN <= y <= box[1] + BBOX_MARGIN
+                               and box[2] - BBOX_MARGIN <= x <= box[3] + BBOX_MARGIN):
             problems.add(name, "地番の点が県の矩形の外", f"{fid} {lat}, {lon}")
 
 

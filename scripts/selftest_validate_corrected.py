@@ -99,6 +99,17 @@ def main():
         got = validate(p["data_dir"], broken, BBOX)
         report("出力ファイルが欠けると落ちる", any("出力がありません" in g for g in got), got)
 
+        # 県の矩形から少しはみ出す地番の点。北海道の南端は 41.358899 で、0.049度外
+        broken = os.path.join(tmp, "broken")
+        shutil.rmtree(broken, ignore_errors=True)
+        shutil.copytree(p["out_dir"], broken)
+        edit(os.path.join(broken, FAC),
+             lambda h, rows: (cell(h, rows, "H003", LAT, "41.31"),
+                              cell(h, rows, "H003", LON, "141.4")))
+        got = validate(p["data_dir"], broken, BBOX)
+        report("矩形から0.1度以内のはみ出しは通す",
+               not any("県の矩形の外" in g for g in got), got)
+
     print(f"\n  {total - failed}/{total} 件")
     return 1 if failed else 0
 
