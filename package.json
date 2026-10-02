@@ -12,7 +12,8 @@
     "geocode:pharmacy": "node vendor/jp-healthcare-osm/scripts/build_addr.js --sector pharmacy",
     "geocode": "npm run geocode:hospital && npm run geocode:clinic && npm run geocode:dental && npm run geocode:maternity && npm run geocode:pharmacy && node vendor/jp-healthcare-osm/scripts/fix_placeholder_coords.js",
     "chiban": "node scripts/geocode_chiban.mjs",
-    "selftest": "node scripts/selftest_chiban.mjs && python3 scripts/selftest_corrected_rules.py"
+    "correct": "python3 scripts/build_corrected.py",
+    "selftest": "node scripts/selftest_chiban.mjs && python3 scripts/selftest_corrected_rules.py && python3 scripts/selftest_corrected.py"
   },
   "dependencies": {
     "@geolonia/japanese-numeral": "^1.1.0",
