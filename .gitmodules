@@ -1,0 +1,3 @@
+[submodule "vendor/jp-healthcare-osm"]
+	path = vendor/jp-healthcare-osm
+	url = https://github.com/nyampire/jp-healthcare-osm.git

@@ -1,0 +1,20 @@
+{
+  "name": "iryo-joho-net-corrected",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "医療情報ネット オープンデータの誤りと確定できる値だけを直したデータセットを作る",
+  "scripts": {
+    "geocode:hospital": "node vendor/jp-healthcare-osm/scripts/build_addr.js --sector hospital",
+    "geocode:clinic": "node vendor/jp-healthcare-osm/scripts/build_addr.js --sector clinic",
+    "geocode:dental": "node vendor/jp-healthcare-osm/scripts/build_addr.js --sector dental",
+    "geocode:maternity": "node vendor/jp-healthcare-osm/scripts/build_addr.js --sector maternity",
+    "geocode:pharmacy": "node vendor/jp-healthcare-osm/scripts/build_addr.js --sector pharmacy",
+    "geocode": "npm run geocode:hospital && npm run geocode:clinic && npm run geocode:dental && npm run geocode:maternity && npm run geocode:pharmacy && node vendor/jp-healthcare-osm/scripts/fix_placeholder_coords.js",
+    "selftest": "echo 自己テストはまだありません"
+  },
+  "dependencies": {
+    "@geolonia/japanese-numeral": "^1.1.0",
+    "@geolonia/normalize-japanese-addresses": "^3.1.3"
+  }
+}
