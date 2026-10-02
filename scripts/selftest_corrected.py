@@ -35,7 +35,7 @@ def main():
         hh, hrs = read(os.path.join(out, "01-2_hospital_speciality_hours_20990101.csv"))
         ph, pha = read(os.path.join(out, "05_pharmacy_20990101.csv"))
         with open(os.path.join(out, "01-1_hospital_facility_info_20990101.csv"), "rb") as f:
-            head_bytes = f.read(12)
+            head_bytes = f.read(7)
         rh, _ = read(os.path.join(p["data_dir"], "01-1_hospital_facility_info_20990101.csv"))
         rhh, _ = read(os.path.join(p["data_dir"], "01-2_hospital_speciality_hours_20990101.csv"))
 
