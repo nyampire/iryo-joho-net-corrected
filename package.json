@@ -16,6 +16,7 @@
     "correct": "python3 scripts/build_corrected.py",
     "selftest": "node scripts/selftest_chiban.mjs && python3 scripts/selftest_corrected_rules.py && python3 scripts/selftest_corrected.py && python3 scripts/selftest_validate_corrected.py",
     "validate": "python3 scripts/validate_corrected.py",
+    "samples": "python3 scripts/build_samples.py",
     "all": "npm run geocode && npm run chiban && npm run correct && npm run selftest && npm run validate"
   },
   "dependencies": {
