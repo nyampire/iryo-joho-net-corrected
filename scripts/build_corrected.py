@@ -99,6 +99,10 @@ def correct_facility_row(row, idx, profile, pairs, url_col, geo, chiban, conflic
     fid = row[0]
     if fid not in geo:
         raise ValueError(f"geocoded.csv に行がありません: {fid}")
+    g = geo[fid]
+    if (g["元_緯度"], g["元_経度"]) != (row[idx[LAT]], row[idx[LON]]):
+        raise ValueError(f"geocoded.csv が元データと合いません。"
+                         f"npm run geocode をやり直してください: {fid}")
     notes = []
     lat, lon, source, note = decide_coord(row[idx[LAT]], row[idx[LON]], geo[fid],
                                           chiban.get(fid))

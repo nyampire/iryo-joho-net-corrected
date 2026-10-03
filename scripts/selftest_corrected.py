@@ -43,6 +43,20 @@ def main():
         rh, _ = read(os.path.join(p["data_dir"], "01-1_hospital_facility_info_20990101.csv"))
         rhh, _ = read(os.path.join(p["data_dir"], "01-2_hospital_speciality_hours_20990101.csv"))
 
+    # geocoded.csv の 元_緯度 が元データと違えば、古い判定として止める
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_fixture(tmp)
+        geo = os.path.join(p["build_dir"], "hospital_geocoded.csv")
+        with open(geo, encoding="utf-8-sig", newline="") as fh_:
+            text = fh_.read()
+        with open(geo, "w", encoding="utf-8-sig", newline="") as fh_:
+            fh_.write(text.replace('"H001","43.055405"', '"H001","43.055406"', 1))
+        try:
+            correct_sector("hospital", p["data_dir"], p["build_dir"], p["chiban"], p["out_dir"])
+            stale = "止まらなかった"
+        except ValueError as e:
+            stale = str(e)
+
     f = {r["ID"]: r for r in fac}
     cases = [
         # 形
@@ -58,6 +72,9 @@ def main():
         ("座標を空欄にした行は緯度経度の位置が ,, になる",
          '"病院4","01",,,' in lines["H004"], True),
         ("見出しは全列引用符付き", lines["ID"].startswith('"ID","正式名称"'), True),
+
+        ("geocoded.csv が元データと合わなければ ValueError にする", stale,
+         "geocoded.csv が元データと合いません。npm run geocode をやり直してください: H001"),
 
         # 座標
         ("元データの座標は残す", (f["H001"][LAT], f["H001"]["座標の出典"]),
