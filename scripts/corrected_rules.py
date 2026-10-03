@@ -35,7 +35,7 @@ RE_TIME_START = re.compile(r"^([月火水木金土日祝])_(.+?)_?開始時間$"
 SUSPECT_NOTE = {
     "too_early": EXCLUSION_NOTE["too_early"],
     "too_late": EXCLUSION_NOTE["too_late"],
-    "overnight_implausible": f"日跨ぎとしても {NIGHT_MAX_DURATION // 60}時間を超える",
+    "overnight_implausible": f"日跨ぎとしても {NIGHT_MAX_DURATION // 60}時間以上",
 }
 
 # parse_closed_dates が解釈しなかった範囲を残り文字列に埋める形
