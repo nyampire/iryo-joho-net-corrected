@@ -9,7 +9,6 @@ selftest_corrected.py と selftest_validate_corrected.py が共有する。
 2つの持ち方の両方を通すために、この2業態を選んでいる。
 """
 
-import csv
 import os
 
 LAT, LON = "所在地座標（緯度）", "所在地座標（経度）"
@@ -20,9 +19,16 @@ DAYS_PH = DAYS + "祝"
 def write(path, header, rows):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
-        w = csv.writer(f, quoting=csv.QUOTE_ALL, lineterminator="\r\n")
-        w.writerow(header)
-        w.writerows(rows)
+        # 元データの形を写す: 見出しは全列引用符付き、データ行は緯度経度の2列だけ引用符なし
+        bare = {header.index(LAT), header.index(LON)} if LAT in header else set()
+
+        def record(fields, bare_cols):
+            return ",".join(v if i in bare_cols else '"' + v.replace('"', '""') + '"'
+                            for i, v in enumerate(fields))
+
+        f.write(record(header, set()) + "\r\n")
+        for row in rows:
+            f.write(record(row, bare) + "\r\n")
 
 
 def flags(open_days):

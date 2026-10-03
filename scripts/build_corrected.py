@@ -131,20 +131,32 @@ def correct_hours_row(row, idx, pairs, conflicts):
     return row + [NOTE_SEP.join(notes)], notes
 
 
+def quote(value):
+    return '"' + value.replace('"', '""') + '"'
+
+
+def format_record(fields, bare):
+    """1件を CSV の1行にする。bare の位置の値だけ引用符を付けない（空欄は空のまま）。
+
+    元データは緯度経度の2列だけ引用符が無いので、それに合わせる。
+    """
+    return ",".join(f if i in bare else quote(f) for i, f in enumerate(fields))
+
+
 def rewrite(src, dst, extra_cols, fix_row, stat):
     """src を1行ずつ読み、fix_row(row, idx, pairs) で直して dst に書く。"""
     name = os.path.basename(src)
     with open(src, encoding="utf-8-sig", newline="") as fi, \
             open(dst, "w", encoding="utf-8-sig", newline="") as fo:
         r = csv.reader(fi)
-        w = csv.writer(fo, quoting=csv.QUOTE_ALL, lineterminator="\r\n")
         header = next(r)
         idx = {h: i for i, h in enumerate(header)}
         pairs = time_pairs(header)
-        w.writerow(header + extra_cols)
+        bare = {idx[LAT], idx[LON]} if LAT in idx else set()
+        fo.write(format_record(header + extra_cols, set()) + "\r\n")
         for row in r:
             out, notes = fix_row(row, idx, header, pairs)
-            w.writerow(out)
+            fo.write(format_record(out, bare) + "\r\n")
             stat[(name, "行")] += 1
             for n in notes:
                 stat[(name, n.split(":", 1)[0])] += 1

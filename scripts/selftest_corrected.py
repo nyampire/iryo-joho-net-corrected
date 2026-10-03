@@ -36,6 +36,10 @@ def main():
         ph, pha = read(os.path.join(out, "05_pharmacy_20990101.csv"))
         with open(os.path.join(out, "01-1_hospital_facility_info_20990101.csv"), "rb") as f:
             head_bytes = f.read(7)
+        with open(os.path.join(out, "01-1_hospital_facility_info_20990101.csv"),
+                  encoding="utf-8-sig", newline="") as f:
+            text = f.read()
+        lines = {ln.split(",", 1)[0].strip('"'): ln for ln in text.split("\r\n")}
         rh, _ = read(os.path.join(p["data_dir"], "01-1_hospital_facility_info_20990101.csv"))
         rhh, _ = read(os.path.join(p["data_dir"], "01-2_hospital_speciality_hours_20990101.csv"))
 
@@ -48,6 +52,12 @@ def main():
          ["H001", "H002", "H003", "H004", "H005", "H006"]),
         ("診療科の票の行数を保つ", len(hrs), 5),
         ("BOM と引用符を元データにそろえる", head_bytes, '﻿"ID"'.encode("utf-8")),
+
+        # 緯度経度の2列だけ引用符を付けない（元データの書き方）
+        ("緯度経度は引用符なしで書く", ',43.055405,141.333497,' in lines["H001"], True),
+        ("座標を空欄にした行は緯度経度の位置が ,, になる",
+         '"病院4","01",,,' in lines["H004"], True),
+        ("見出しは全列引用符付き", lines["ID"].startswith('"ID","正式名称"'), True),
 
         # 座標
         ("元データの座標は残す", (f["H001"][LAT], f["H001"]["座標の出典"]),
