@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
+  "engines": { "node": ">=26" },
   "description": "医療情報ネット オープンデータの誤りと確定できる値だけを直したデータセットを作る",
   "scripts": {
     "geocode:hospital": "node vendor/jp-healthcare-osm/scripts/build_addr.js --sector hospital",

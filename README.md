@@ -22,6 +22,7 @@ export NJA_API_BASE=/path/to/japanese-addresses-v2/out/api/ja
 npm run all
 ```
 
+Node.js v26 以上が必要です（`.mjs` から `.ts` を読み込み、`import.meta.main` を使うため）。
 住所データの取得先 `NJA_API_BASE` の設定は必須です。
 手元に構築した `japanese-addresses-v2` を指してください。
 構築の手順は `vendor/jp-healthcare-osm/vendor/nja-osm-tags/docs/local-mirror.md` にあります。
@@ -43,7 +44,7 @@ npm run all
 | ホームページアドレス | 検索エンジンの転送 URL | 空欄にする |
 
 次の値は、元の値を残して `注記` に書きます。
-06:00より前の開始、23:00より後の終了、日跨ぎとして18時間を超える区間、曜日フラグと時刻の矛盾、31日を超える休診日の範囲、スキームの無い URL です。
+06:00より前の開始、23:00より後の終了、日跨ぎとして18時間以上の区間、曜日フラグと時刻の矛盾、31日を超える休診日の範囲、スキームの無い URL、URL として読めない形式の URL です。
 直した値も、元の値を `注記` に残します。
 
 | 座標の出典 | 件数 |
