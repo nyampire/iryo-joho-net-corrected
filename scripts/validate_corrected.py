@@ -7,11 +7,22 @@ build_corrected.py と corrected_rules.py の関数は使わない。
 検査:
   行数、行の順序、ID 列が元データと一致する
   元データと値が違うセルは、緯度、経度、時刻、ホームページアドレスの列に限られる
-  値が違うセルは、同じ行の 注記 に元の値が書かれている
+  元データで空だったセルが埋まっていない
+  値が違うセルは、同じ行の 注記 に、ラベル付きの断片で元の値が書かれている
+    緯度または経度: 「緯度経度 元の緯度, 元の経度」
+    ホームページアドレス: 「ホームページアドレス 元の値」
+    時刻: 「表示名 元の開始-元の終了」（月_診療開始時間 なら 月_診療）
+  値が変わった時刻のセルは空欄になっている
+  値が1つも変わっていない行と見出しは、元データのレコード文字列に「,」と追加した列が
+    続く形になっている（引用符の付け方まで元データと同じ）
   0.0 の座標と、開始と終了が同じ区間が残っていない
   座標の出典 の値が決まった語のどれかで、座標の有無と食い違わない
   座標の出典 が 原データ の行は、座標が元データと同じ
   座標の出典 が 地番 の行は、座標が住所の県の矩形の中にある
+
+限界:
+  正しい座標を注記つきで空欄にした場合と、置き換え先の値そのものの誤りは、
+  この検証器では見つけられない。
 
 地番の点が OSM 向けの出力に混じらないことは、リポジトリを jp-healthcare-osm と
 分けたことで保たれるので、ここでは確かめない。
@@ -51,6 +62,27 @@ def load_bbox(path):
                 for r in csv.DictReader(f)}
 
 
+RE_START = re.compile(r"^([月火水木金土日祝])_(.+?)_?開始時間$")
+
+
+def time_label(start_col):
+    """開始時間の列名から、注記に書かれる表示名を作る。月_診療開始時間 -> 月_診療"""
+    m = RE_START.match(start_col)
+    return f"{m.group(1)}_{m.group(2)}"
+
+
+def records(f):
+    """ファイルを引用符の中の改行を考慮して1件ずつの文字列に分ける。行末は含めない。"""
+    buf = ""
+    for line in f:
+        buf += line
+        if buf.count('"') % 2 == 0:
+            yield buf.rstrip("\r\n")
+            buf = ""
+    if buf:
+        yield buf.rstrip("\r\n")
+
+
 class Problems:
     def __init__(self):
         self.lines = []
@@ -71,9 +103,15 @@ class Problems:
 def check_file(raw_path, out_path, bbox, problems):
     name = os.path.basename(raw_path)
     with open(raw_path, encoding="utf-8-sig", newline="") as fr, \
-            open(out_path, encoding="utf-8-sig", newline="") as fo:
+            open(out_path, encoding="utf-8-sig", newline="") as fo, \
+            open(raw_path, encoding="utf-8-sig", newline="") as fr_text, \
+            open(out_path, encoding="utf-8-sig", newline="") as fo_text:
         rr, ro = csv.reader(fr), csv.reader(fo)
+        rt, ot = records(fr_text), records(fo_text)
         rh, oh = next(rr), next(ro)
+        raw_head, out_head = next(rt, ""), next(ot, "")
+        if not out_head.startswith(raw_head + ","):
+            problems.add(name, "変わっていない行の書式が元データと違う", "見出し")
         has_coord = LAT in rh
         want = rh + [NOTE] + ([SOURCE] if has_coord else [])
         if oh != want:
@@ -84,6 +122,7 @@ def check_file(raw_path, out_path, bbox, problems):
         starts = [(ri[c], ri[c[: -len("開始時間")] + "終了時間"], c)
                   for c in rh if RE_TIME_COL.match(c) and c.endswith("開始時間")]
         for n, (raw, out) in enumerate(itertools.zip_longest(rr, ro), start=2):
+            raw_rec, out_rec = next(rt, None), next(ot, None)
             if raw is None or out is None:
                 problems.add(name, "行数が元データと合わない", f"{n} 行目で片方が尽きた")
                 return
@@ -91,19 +130,44 @@ def check_file(raw_path, out_path, bbox, problems):
                 problems.add(name, "ID が元データと合わない", f"{n} 行目 {raw[0]} / {out[0]}")
                 continue
             note = out[note_i]
-            for i, col in enumerate(rh):
-                if raw[i] == out[i]:
-                    continue
+            changed = [i for i in range(len(rh)) if raw[i] != out[i]]
+            if not changed and not out_rec.startswith(raw_rec + ","):
+                problems.add(name, "変わっていない行の書式が元データと違う", raw[0])
+            for i in changed:
+                col = rh[i]
                 if not editable(col):
                     problems.add(name, "書き換えてよい列ではない", f"{raw[0]} {col}")
-                elif raw[i] not in note:
-                    problems.add(name, "注記に元の値が無い", f"{raw[0]} {col} {raw[i]!r}")
+                elif raw[i] == "":
+                    problems.add(name, "空欄だった値が埋まっている", f"{raw[0]} {col} {out[i]!r}")
+                elif RE_TIME_COL.match(col) and out[i] != "":
+                    problems.add(name, "時刻が空欄以外に変わっている",
+                                 f"{raw[0]} {col} {raw[i]!r} -> {out[i]!r}")
+            check_notes(name, raw, rh, ri, starts, changed, note, problems)
             for si, ei, col in starts:
                 if out[si] and out[si] == out[ei]:
                     problems.add(name, "開始と終了が同じ区間が残っている",
                                  f"{raw[0]} {col} {out[si]}")
             if has_coord:
                 check_coord(name, raw, out, ri, bbox, problems)
+
+
+def check_notes(name, raw, rh, ri, starts, changed, note, problems):
+    """値が変わったセルの元の値が、ラベル付きの断片で注記に書かれているか。"""
+    fid = raw[0]
+    changed = set(changed)
+
+    def need(fragment):
+        if fragment not in note:
+            problems.add(name, "注記に元の値が無い", f"{fid} {fragment!r}")
+
+    if LAT in ri and (ri[LAT] in changed or ri[LON] in changed):
+        need(f"緯度経度 {raw[ri[LAT]]}, {raw[ri[LON]]}")
+    for i in sorted(changed):
+        if rh[i].endswith("ホームページアドレス") and raw[i]:
+            need(f"ホームページアドレス {raw[i]}")
+    for si, ei, col in starts:
+        if (si in changed or ei in changed) and (raw[si] or raw[ei]):
+            need(f"{time_label(col)} {raw[si]}-{raw[ei]}")
 
 
 def check_coord(name, raw, out, ri, bbox, problems):

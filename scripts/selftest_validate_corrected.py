@@ -36,6 +36,16 @@ def edit(path, fn):
         w.writerows(rows)
 
 
+def replace_text(path, old, new):
+    """出力ファイルの文字列を直接置き換える。csv で読み書きすると引用符が変わるため。"""
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        text = f.read()
+    if old not in text:
+        raise ValueError(f"置き換え元の文字列がありません: {old!r}")
+    with open(path, "w", encoding="utf-8-sig", newline="") as f:
+        f.write(text.replace(old, new, 1))
+
+
 def cell(header, rows, row_id, col, value, nth=0):
     """ID が row_id の nth 番目の行の col を value にする。"""
     hits = [r for r in rows if r[0] == row_id]
@@ -61,6 +71,18 @@ def main():
          FAC, lambda h, rows: cell(h, rows, "H004", "座標の出典", "住居表示")),
         ("元データの座標を使ったのに値が違うと落ちる", "原データ",
          FAC, lambda h, rows: cell(h, rows, "H006", "座標の出典", "原データ")),
+        ("空だった値を埋めると落ちる", "空欄だった値が埋まっている",
+         HRS, lambda h, rows: cell(h, rows, "H001", "日_診療開始時間", "10:00")),
+        ("注記が値だけでラベルが無いと落ちる", "注記に元の値が無い",
+         FAC, lambda h, rows: cell(h, rows, "H002", "注記", "0.0")),
+        ("時刻を空欄以外に変えると落ちる", "時刻が空欄以外に変わっている",
+         HRS, lambda h, rows: cell(h, rows, "H001", "火_診療開始時間", "10:00", 1)),
+    ]
+
+    # 文字列の置き換えで壊すもの: (名前, キーワード, 対象, 置き換え元, 置き換え先)
+    text_breaks = [
+        ("値が同じで引用符だけ違う行は落ちる", "変わっていない行の書式が元データと違う",
+         HRS, '"09010"', "09010"),
     ]
 
     failed = 0
@@ -88,6 +110,14 @@ def main():
             shutil.rmtree(broken, ignore_errors=True)
             shutil.copytree(p["out_dir"], broken)
             edit(os.path.join(broken, target), fn)
+            got = validate(p["data_dir"], broken, BBOX)
+            report(name, any(keyword in g for g in got), got)
+
+        for name, keyword, target, old, new in text_breaks:
+            broken = os.path.join(tmp, "broken")
+            shutil.rmtree(broken, ignore_errors=True)
+            shutil.copytree(p["out_dir"], broken)
+            replace_text(os.path.join(broken, target), old, new)
             got = validate(p["data_dir"], broken, BBOX)
             report(name, any(keyword in g for g in got), got)
 
