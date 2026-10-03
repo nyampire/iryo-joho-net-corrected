@@ -122,6 +122,7 @@ def decide_coord(raw_lat, raw_lon, geo, chiban):
 
     置き換えるかどうかは既存の処理の判定（geocoded.csv の 座標の出典）に従う。
     置き換え先は位置レベル8の点だけで、住居表示の点を先に使う。
+    注記には捨てた座標と理由だけを書く。新しい値は緯度経度の列にあり、注記に重ねない。
     geocoded.csv の 住所_位置レベル が8の点は、nja-osm-tags が地番の点を返さないので
     住居表示の点に限られる。
     """
@@ -131,10 +132,10 @@ def decide_coord(raw_lat, raw_lon, geo, chiban):
     if geo["住所_位置レベル"] == "8" and geo["住所_lat"] and geo["住所_lon"]:
         lat, lon = geo["住所_lat"], geo["住所_lon"]
         return lat, lon, "住居表示", (f"書き換えた: 緯度経度 {raw_lat}, {raw_lon} → "
-                                    f"住居表示の点 {lat}, {lon}（{why}）")
+                                    f"住居表示の点（{why}）")
     if chiban:
         lat, lon = chiban
         return lat, lon, "地番", (f"書き換えた: 緯度経度 {raw_lat}, {raw_lon} → "
-                                f"地番の点 {lat}, {lon}（{why}）")
+                                f"地番の点（{why}）")
     return "", "", "", (f"空欄にした: 緯度経度 {raw_lat}, {raw_lon}"
                         f"（{why}。位置レベル8の住所の点が無い）")
