@@ -87,9 +87,9 @@ def has_counted_time(row, idx, day):
     return classify(a, b) is None
 
 
-def correct_times(row, idx, pairs, notes):
+def correct_times(row, idx, pairs, notes, suspect=True):
     for start, end, label in pairs:
-        a, b, note = fix_time(row[idx[start]], row[idx[end]], label)
+        a, b, note = fix_time(row[idx[start]], row[idx[end]], label, suspect)
         row[idx[start]], row[idx[end]] = a, b
         if note:
             notes.append(note)
@@ -132,7 +132,9 @@ def correct_hours_row(row, idx, pairs, conflicts):
     for day, what in conflicts.get(row[0], []):
         if "休みだが" in what and has_counted_time(row, idx, day):
             notes.append(f"疑い: {day} 施設票の{what}")
-    correct_times(row, idx, pairs, notes)
+    # 救急科の時刻は外来の基準で疑わない。OSM 向けの処理も救急科を外来と分けている
+    correct_times(row, idx, pairs, notes,
+                  suspect=row[idx["診療科目コード"]] not in EMERGENCY_CODES)
     return row + [NOTE_SEP.join(notes)], notes
 
 

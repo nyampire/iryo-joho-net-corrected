@@ -56,14 +56,19 @@ def time_pairs(header):
     return pairs
 
 
-def fix_time(a, b, label):
-    """開始と終了の組を直す。(開始, 終了, 注記) を返す。"""
+def fix_time(a, b, label, suspect=True):
+    """開始と終了の組を直す。(開始, 終了, 注記) を返す。
+
+    suspect が偽の行（救急科）は、早朝、深夜、長い日跨ぎに疑いを付けない。
+    救急科は深夜や24時間の受け付けが普通で、外来の基準が当てはまらないため。
+    開始と終了が同じ区間は、救急科でも空欄にする。
+    """
     if not (a.strip() and b.strip()):
         return a, b, ""
     kind = classify(a.strip(), b.strip())
     if kind == "null_placeholder":
         return "", "", f"空欄にした: {label} {a}-{b}（開始と終了が同じ）"
-    if kind in SUSPECT_NOTE:
+    if suspect and kind in SUSPECT_NOTE:
         return a, b, f"疑い: {label} {a}-{b}（{SUSPECT_NOTE[kind]}）"
     return a, b, ""
 
@@ -90,11 +95,16 @@ def fix_url(value, label):
         return value, ""
     if RE_REDIRECT.match(v):
         return "", f"空欄にした: {label} {value}（検索エンジンの転送 URL）"
-    if RE_URL.match(v):
+    # スキームは大文字小文字を区別しない（`HTTP://` も開ける）。
+    # build_osm の正規表現は小文字だけを受け付けるので、スキームだけ小文字にして照らす
+    lowered = RE_SCHEME.sub(lambda s: s.group(0).lower(), v)
+    if RE_URL.match(lowered):
         return value, ""
-    m = RE_MISSING_COLON.match(v)
+    m = RE_MISSING_COLON.match(lowered)
     if m:
-        fixed = f"{m.group(1)}://{m.group(2)}"
+        # 補うのはコロンだけで、スキームの大文字小文字は元のまま残す
+        n = len(m.group(1))
+        fixed = f"{v[:n]}://{m.group(2)}"
         return fixed, f"書き換えた: {label} {value} → {fixed}（コロンの脱字）"
     if RE_BARE_DOMAIN.match(v):
         return value, f"疑い: {label} {value}（スキームが無い）"
@@ -103,6 +113,10 @@ def fix_url(value, label):
 
 # build_addr.js と fix_placeholder_coords.js が 座標の理由 に書く文から、理由の句を取り出す
 RE_COORD_REASON = re.compile(r"^元データの座標 [-\d.]+, [-\d.]+ [がを](.+?)ため")
+# fix_placeholder_coords.js が丸め値に書く句。「0.1度の格子に乗る丸め値の」
+RE_GRID = re.compile(r"^([\d.]+)度の格子に乗る丸め値の?$")
+# URL のスキーム部分。大文字小文字をそろえて照らすために使う
+RE_SCHEME = re.compile(r"^https?(?=:|//)", re.I)
 
 
 def coord_reason(raw_lat, raw_lon, geo):
@@ -115,8 +129,15 @@ def coord_reason(raw_lat, raw_lon, geo):
     m = RE_COORD_REASON.match(text)
     if not m:
         raise ValueError(f"座標を置き換える理由が読めません: {geo['ID']} {text!r}")
-    # 「1度の格子に乗る丸め値のため」の「の」は、ためにつなぐための語なので落とす
-    return m.group(1).replace("ジオコーダ座標", "住所の点").removesuffix("の")
+    phrase = m.group(1)
+    # 「0.1度の格子に乗る丸め値」では伝わらなかったので、何桁に丸めた値かを書く
+    g = RE_GRID.match(phrase)
+    if g:
+        step = g.group(1)
+        digits = len(step.split(".")[1]) if "." in step else 0
+        where = f"小数第{digits}位まで" if digits else "整数"
+        return f"{where}に丸めた値で、施設の位置を指していない"
+    return phrase.replace("ジオコーダ座標", "住所の点")
 
 
 def decide_coord(raw_lat, raw_lon, geo, chiban):
