@@ -107,8 +107,10 @@ RE_COORD_REASON = re.compile(r"^元データの座標 [-\d.]+, [-\d.]+ [がを](
 
 def coord_reason(raw_lat, raw_lon, geo):
     """元データの座標を使わない理由を、句点を含まない句で返す。"""
+    # 元データは座標の無い施設に 0.0, 0.0 を入れている。
+    # 「欠損を示す値」と書くと、元の座標を捨てたように読まれたので、座標が無かったことを書く
     if float(raw_lat or 0) == 0 or float(raw_lon or 0) == 0:
-        return "欠損を示す値"
+        return "元データに座標が無い"
     text = geo.get("座標の理由", "")
     m = RE_COORD_REASON.match(text)
     if not m:
