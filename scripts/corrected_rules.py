@@ -130,13 +130,10 @@ def coord_reason(raw_lat, raw_lon, geo):
     if not m:
         raise ValueError(f"座標を置き換える理由が読めません: {geo['ID']} {text!r}")
     phrase = m.group(1)
-    # 「0.1度の格子に乗る丸め値」では伝わらなかったので、何桁に丸めた値かを書く
-    g = RE_GRID.match(phrase)
-    if g:
-        step = g.group(1)
-        digits = len(step.split(".")[1]) if "." in step else 0
-        where = f"小数第{digits}位まで" if digits else "整数"
-        return f"{where}に丸めた値で、施設の位置を指していない"
+    # 「0.1度の格子に乗る丸め値」では伝わらなかった。
+    # 実データには 28.1, 129.2 のほか 33, 130 のような整数もあるので、桁の数は書かない
+    if RE_GRID.match(phrase):
+        return "小数点以下の桁が少なく、施設の位置を表せない大まかな値"
     return phrase.replace("ジオコーダ座標", "住所の点")
 
 
