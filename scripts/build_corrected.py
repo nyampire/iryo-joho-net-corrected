@@ -13,7 +13,7 @@ OSM のタグには変換しない。元データの列を同じ順で残し、�
 出力:
   output/corrected/<元データと同じファイル名>
 
-書き出しは1行ずつだが、曜日フラグと時刻の矛盾の判定のために全区間を読み込む。
+書き出しは1行ずつだが、曜日の列と時刻の矛盾の判定のために全区間を読み込む。
 診療所のピークは約670MBになる。
 
 使い方:
@@ -33,8 +33,8 @@ sys.path.insert(0, os.path.join(HERE, "..", "vendor", "jp-healthcare-osm", "scri
 from build_opening_hours import (EMERGENCY_CODES, SECTORS, classify,  # noqa: E402
                                  find_conflicts, load_facilities, load_intervals,
                                  load_intervals_inline, resolve)
-from corrected_rules import (NOTE_SEP, closed_date_notes, decide_coord,  # noqa: E402
-                             fix_time, fix_url, time_pairs)
+from corrected_rules import (NOTE_SEP, closed_date_notes, conflict_note,  # noqa: E402
+                             decide_coord, fix_time, fix_url, time_pairs)
 
 LAT, LON = "所在地座標（緯度）", "所在地座標（経度）"
 NOTE, SOURCE = "注記", "座標の出典"
@@ -95,7 +95,7 @@ def correct_times(row, idx, pairs, notes, suspect=True):
             notes.append(note)
 
 
-def correct_facility_row(row, idx, profile, pairs, url_col, geo, chiban, conflicts):
+def correct_facility_row(row, idx, sector, profile, pairs, url_col, geo, chiban, conflicts):
     """施設票（助産所と薬局では唯一の票）の1行を直す。(行, 注記の一覧) を返す。"""
     fid = row[0]
     if fid not in geo:
@@ -112,7 +112,7 @@ def correct_facility_row(row, idx, profile, pairs, url_col, geo, chiban, conflic
         notes.append(note)
     correct_times(row, idx, pairs, notes)
     for day, what in conflicts.get(fid, []):
-        notes.append(f"疑い: {day} {what}")
+        notes.append(conflict_note(sector, profile, day, what))
     notes += closed_date_notes(row[idx[profile["other"]]], profile["other"])
     if url_col:
         value, note = fix_url(row[idx[url_col]], URL_LABEL)
@@ -122,7 +122,7 @@ def correct_facility_row(row, idx, profile, pairs, url_col, geo, chiban, conflic
     return row + [NOTE_SEP.join(notes), source], notes
 
 
-def correct_hours_row(row, idx, pairs, conflicts):
+def correct_hours_row(row, idx, sector, profile, pairs, conflicts):
     """診療科の票の1行を直す。(行, 注記の一覧) を返す。
 
     矛盾の注記は、施設票で休みの曜日に、この行が数えられる時刻を持つときだけ書く。
@@ -131,7 +131,7 @@ def correct_hours_row(row, idx, pairs, conflicts):
     notes = []
     for day, what in conflicts.get(row[0], []):
         if "休みだが" in what and has_counted_time(row, idx, day):
-            notes.append(f"疑い: {day} 施設票の{what}")
+            notes.append(conflict_note(sector, profile, day, what, on_hours_row=True))
     # 救急科の時刻は外来の基準で疑わない。OSM 向けの処理も救急科を外来と分けている
     correct_times(row, idx, pairs, notes,
                   suspect=row[idx["診療科目コード"]] not in EMERGENCY_CODES)
@@ -183,11 +183,11 @@ def correct_sector(sector, data_dir, build_dir, chiban_path, out_dir):
 
     def facility(row, idx, header, pairs):
         url_col = next((h for h in header if h.endswith(URL_LABEL)), None)
-        return correct_facility_row(row, idx, profile, pairs, url_col, geo, chiban,
+        return correct_facility_row(row, idx, sector, profile, pairs, url_col, geo, chiban,
                                     conflicts)
 
     def hours(row, idx, header, pairs):
-        return correct_hours_row(row, idx, pairs, conflicts)
+        return correct_hours_row(row, idx, sector, profile, pairs, conflicts)
 
     rewrite(f1, os.path.join(out_dir, os.path.basename(f1)), [NOTE, SOURCE], facility, stat)
     if f2:

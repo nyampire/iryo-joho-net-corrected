@@ -41,6 +41,16 @@ SUSPECT_NOTE = {
 # parse_closed_dates が解釈しなかった範囲を残り文字列に埋める形
 RE_REJECTED_RANGE = re.compile(r"\[\d+日超の範囲:(.+?)\]")
 
+# 曜日の列の 0 と 1 の意味と、時刻の呼び方。業態ごとに定義書の「フォーマット」列の語を使う。
+# どの業態も 0 が閉、1 が開で、列名の「休診」「休業」とは逆になる
+SECTOR_WORDS = {
+    "hospital": ("休診", "診療", "診療時間"),
+    "clinic": ("休診", "診療", "診療時間"),
+    "dental": ("休診", "診療", "診療時間"),
+    "maternity": ("休業", "就業", "就業時間"),
+    "pharmacy": ("閉店", "開店", "開店時間"),
+}
+
 
 def time_pairs(header):
     """時刻の列を (開始列, 終了列, 表示名) の組で、列の順に返す。"""
@@ -71,6 +81,23 @@ def fix_time(a, b, label, suspect=True):
     if suspect and kind in SUSPECT_NOTE:
         return a, b, f"疑い: {label} {a}-{b}（{SUSPECT_NOTE[kind]}）"
     return a, b, ""
+
+
+def conflict_note(sector, profile, day, what, on_hours_row=False):
+    """曜日の列と時刻の矛盾を、元データの列名で注記にする。
+
+    what は build_opening_hours.find_conflicts が返す内容の文。
+    「曜日フラグ」は元データを見る人に通じないので、列名と値の意味で書く。
+    on_hours_row が真なら診療科の票の行に書く文で、列が別のファイルにあることを添える。
+    """
+    closed, opened, time_word = SECTOR_WORDS[sector]
+    col = profile["ph"] if day == "祝" else profile["weekly"].format(d=day)
+    when = "祝日" if day == "祝" else f"{day}曜"
+    where = "施設情報のファイルの" if on_hours_row else ""
+    if "時刻が無い" in what:
+        return f"疑い: {where}「{col}」が 1（{opened}）だが、{when}の{time_word}が無い"
+    here = "この行に" if on_hours_row else ""
+    return f"疑い: {where}「{col}」が 0（{closed}）だが、{here}{when}の{time_word}が入っている"
 
 
 def closed_date_notes(text, label):
@@ -107,7 +134,7 @@ def fix_url(value, label):
         fixed = f"{v[:n]}://{m.group(2)}"
         return fixed, f"書き換えた: {label} {value} → {fixed}（コロンの脱字）"
     if RE_BARE_DOMAIN.match(v):
-        return value, f"疑い: {label} {value}（スキームが無い）"
+        return value, f"疑い: {label} {value}（http:// や https:// が無い）"
     return value, f"疑い: {label} {value}（URL として読めない形式）"
 
 
@@ -134,7 +161,7 @@ def coord_reason(raw_lat, raw_lon, geo):
     # 実データには 28.1, 129.2 のほか 33, 130 のような整数もあるので、桁の数は書かない
     if RE_GRID.match(phrase):
         return "小数点以下の桁が少なく、施設の位置を表せない大まかな値"
-    return phrase.replace("ジオコーダ座標", "住所の点")
+    return phrase.replace("ジオコーダ座標から", "住所から")
 
 
 def decide_coord(raw_lat, raw_lon, geo, chiban):
@@ -152,10 +179,10 @@ def decide_coord(raw_lat, raw_lon, geo, chiban):
     if geo["住所_位置レベル"] == "8" and geo["住所_lat"] and geo["住所_lon"]:
         lat, lon = geo["住所_lat"], geo["住所_lon"]
         return lat, lon, "住居表示", (f"書き換えた: 緯度経度 {raw_lat}, {raw_lon} → "
-                                    f"住居表示の点（{why}）")
+                                    f"住居表示の住所から求めた位置（{why}）")
     if chiban:
         lat, lon = chiban
         return lat, lon, "地番", (f"書き換えた: 緯度経度 {raw_lat}, {raw_lon} → "
-                                f"地番の点（{why}）")
+                                f"地番の住所から求めた位置（{why}）")
     return "", "", "", (f"空欄にした: 緯度経度 {raw_lat}, {raw_lon}"
-                        f"（{why}。位置レベル8の住所の点が無い）")
+                        f"（{why}。住所から建物の位置を特定できなかった）")
