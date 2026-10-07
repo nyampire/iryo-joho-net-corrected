@@ -17,6 +17,7 @@ validate_corrected.py は、値が変わったセルの元の値が注記に含�
 import os
 import re
 import sys
+import unicodedata
 
 # 判定の関数は submodule の jp-healthcare-osm から読む
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "vendor",
@@ -137,7 +138,89 @@ def fix_url(value, label):
     if RE_BARE_DOMAIN.match(v):
         fixed = f"https://{v}"
         return fixed, f"書き換えた: {label} {value} → {fixed}（http:// や https:// が無いので https:// を補った）"
+    repaired = repair_url(v)
+    if repaired:
+        fixed, typos, added = repaired
+        parts = []
+        if typos:
+            parts.append("打ち間違いを直した: " + "、".join(typos))
+        if added:
+            parts.append("http:// や https:// が無いので https:// を補った")
+        why = "。".join(parts)
+        return fixed, f"書き換えた: {label} {value} → {fixed}（{why}）"
     return value, f"疑い: {label} {value}（URL として読めない形式）"
+
+
+def edit_distance(a, b):
+    """1文字の挿入、削除、置換を1回と数えた編集距離。"""
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def repair_url(v):
+    """打ち間違いの程度の崩れを直す。(直した値, 直した箇所の一覧, https:// を補ったか) を返す。
+
+    直した結果がホスト名の形にならないもの、URL が2つ以上あるものは直さず None を返す。
+    元データでは http:/、http:www、https;//、htpp://、途中の空白などが見つかった（2026-10-07）。
+    www// や www:// は www. の打ち間違いとも読めるので直さない。
+    """
+    typos = []
+    # 先頭の記号を先に除く。半角の「･」は NFKC で全角の「・」になるので、
+    # 逆の順では全角を直したと数えてしまう
+    head = RE_URL_JUNK.match(v)
+    s = v[head.end():]
+    if head.group(0):
+        typos.append("先頭の余分な文字")
+    normalized = unicodedata.normalize("NFKC", s)
+    if normalized != s:
+        s = normalized
+        typos.append("全角の文字")
+    if len(RE_URL_SEP.findall(s)) > 1:
+        return None
+    scheme = None
+    if s.startswith("//"):
+        scheme, rest = "https", s[2:]
+        typos.append("「https:」の抜け")
+    else:
+        m = RE_URL_HEAD.match(s)
+        sep = re.sub(r"\s", "", m.group(2)) if m else ""
+        # 区切りにコロン、セミコロン、スラッシュのどれかが要る。ピリオドだけの区切りは
+        # hp.example.jp のようなホスト名の一部なので、スキームと見なさない
+        if m and m.group(1).lower() != "www" and re.search(r"[:;/]", sep):
+            token = m.group(1)
+            target = "https" if token.lower().endswith("s") else "http"
+            if edit_distance(token.lower(), target) <= URL_SCHEME_MAX_EDITS:
+                if token.lower() != target:
+                    typos.append(f"「{target}」の綴り")
+                    token = target
+                if m.group(2) != "://":
+                    typos.append("「://」の形")
+                scheme, rest = token, s[m.end():]
+    if scheme is None:
+        rest = s
+    if re.search(r"\s", rest):
+        rest = re.sub(r"\s+", "", rest)
+        typos.append("途中の空白")
+    host, slash, path = rest.partition("/")
+    if "," in host:
+        host = host.replace(",", ".")
+        typos.append("ピリオドの代わりのカンマ")
+    if ".." in host:
+        host = re.sub(r"\.{2,}", ".", host)
+        typos.append("重なったピリオド")
+    # 「akiba-dental.com.」のように、文の句点が紛れたもの
+    if host.endswith("."):
+        host = host.rstrip(".")
+        typos.append("末尾のピリオド")
+    if not RE_URL_HOST.match(host):
+        return None
+    added = scheme is None
+    return f"{scheme or 'https'}://{host}{slash}{path}", typos, added
 
 
 # build_addr.js と fix_placeholder_coords.js が 座標の理由 に書く文から、理由の句を取り出す
@@ -146,6 +229,17 @@ RE_COORD_REASON = re.compile(r"^元データの座標 [-\d.]+, [-\d.]+ [がを](
 RE_GRID = re.compile(r"^([\d.]+)度の格子に乗る丸め値の?$")
 # URL のスキーム部分。大文字小文字をそろえて照らすために使う
 RE_SCHEME = re.compile(r"^https?(?=:|//)", re.I)
+# 打ち間違いを直すときに使う形。
+# 先頭の「URL:」や記号、スキームらしい語と区切り、ホスト名、URL の区切り（2つ目の URL を見つける）
+RE_URL_JUNK = re.compile(r"^(?:url\s*:\s*|[\s'\"`･・:\-]+)?", re.I)
+# スキームらしい語と、その後の区切り（コロン、セミコロン、ピリオド、カンマ、スラッシュ、空白の並び）
+RE_URL_HEAD = re.compile(r"^([A-Za-z]{2,7})([\s:;.,/]*)")
+# 最後のラベル（.jp や .com）は英字2文字以上とする。tomio.d.c のような値をドメインと見なさない
+RE_URL_HOST = re.compile(r"^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$")
+RE_URL_SEP = re.compile(r"h[a-z]{1,5}[:;.,]{0,2}//", re.I)
+# スキームらしい語を http か https の打ち間違いと見なす編集距離の上限。
+# 2 なら htpps、hyyps、hrrp を直し、hppt（3）は直さない
+URL_SCHEME_MAX_EDITS = 2
 
 
 def coord_reason(raw_lat, raw_lon, geo):
