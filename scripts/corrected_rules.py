@@ -113,9 +113,10 @@ def closed_date_notes(text, label):
 def fix_url(value, label):
     """ホームページアドレスを直す。(値, 注記) を返す。
 
-    OSM 向けの clean_url とは規則が違う。スキームが無い値に https を補わず、
-    300文字の上限でも落とさない。前者は http か https かを元データから決められず、
-    後者は OSM のタグ値の上限で、元の値の誤りではないため。
+    http:// や https:// が無い値には https:// を補う。元データからはどちらか決められないが、
+    今のウェブでは http だけのサイトはほとんど無いので、https を採る（2026-10-07 に決定）。
+    OSM 向けの clean_url と違い、300文字の上限では落とさない。
+    それは OSM のタグ値の上限で、元の値の誤りではないため。
     """
     v = value.strip()
     if not v:
@@ -134,7 +135,8 @@ def fix_url(value, label):
         fixed = f"{v[:n]}://{m.group(2)}"
         return fixed, f"書き換えた: {label} {value} → {fixed}（コロンの脱字）"
     if RE_BARE_DOMAIN.match(v):
-        return value, f"疑い: {label} {value}（http:// や https:// が無い）"
+        fixed = f"https://{v}"
+        return fixed, f"書き換えた: {label} {value} → {fixed}（http:// や https:// が無いので https:// を補った）"
     return value, f"疑い: {label} {value}（URL として読めない形式）"
 
 
