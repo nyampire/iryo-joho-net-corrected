@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "engines": { "node": ">=26" },
+  "engines": {
+    "node": ">=26"
+  },
   "description": "医療情報ネット オープンデータの誤りと確定できる値だけを直したデータセットを作る",
   "scripts": {
     "geocode:hospital": "node vendor/jp-healthcare-osm/scripts/build_addr.js --sector hospital",
@@ -14,10 +16,11 @@
     "geocode": "npm run geocode:hospital && npm run geocode:clinic && npm run geocode:dental && npm run geocode:maternity && npm run geocode:pharmacy && node vendor/jp-healthcare-osm/scripts/fix_placeholder_coords.js",
     "chiban": "node scripts/geocode_chiban.mjs",
     "correct": "python3 scripts/build_corrected.py",
-    "selftest": "node scripts/selftest_chiban.mjs && python3 scripts/selftest_corrected_rules.py && python3 scripts/selftest_corrected.py && python3 scripts/selftest_validate_corrected.py",
+    "selftest": "node scripts/selftest_chiban.mjs && python3 scripts/selftest_corrected_rules.py && python3 scripts/selftest_corrected.py && python3 scripts/selftest_validate_corrected.py && python3 scripts/selftest_release.py",
     "validate": "python3 scripts/validate_corrected.py",
     "samples": "python3 scripts/build_samples.py",
-    "all": "npm run geocode && npm run chiban && npm run correct && npm run selftest && npm run validate"
+    "all": "npm run geocode && npm run chiban && npm run correct && npm run selftest && npm run validate",
+    "release": "python3 scripts/build_release.py"
   },
   "dependencies": {
     "@geolonia/japanese-numeral": "^1.1.0",
