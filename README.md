@@ -36,31 +36,6 @@ Node.js v26 以上が必要です（`.mjs` から `.ts` を読み込み、`impor
 
 スクリプトを実行せずに中身を確かめたい場合は、[`samples/`](samples/) に高知県の分を置いています。
 
-## 配布
-
-都道府県ごとの ZIP を、[Releases](https://github.com/nyampire/iryo-joho-net-corrected/releases) に置いています。
-元データが更新されるたび（半年に1回程度）に、新しいリリースとして作り直します。
-
-ZIP の名前は `iryo-joho-net-corrected_<元データの日付>_<都道府県コード>.zip` です（`13` が東京都）。
-1つの ZIP に、その都道府県の分の次のファイルが入っています。
-
-| ファイル | 内容 |
-|---|---|
-| 元データと同じ名前の CSV（8個） | `output/corrected/` の CSV から、その都道府県の施設と、その施設の診療科の行を抜き出したもの |
-| 施設票と同じ名前の GeoJSON（5個） | 施設票の行を点にしたもの。属性は CSV の全列を同じ文字列のまま入れている |
-| `README.txt` | 中身の説明と出典明示 |
-
-緯度経度が空欄の施設は点にできないので、GeoJSON には入れていません（CSV には入っています）。
-診療科の票は位置を持たないので CSV だけです。
-施設とは `ID` 列でつなぎます。
-
-ZIP は次のコマンドで `output/release/` に作れます。
-
-```bash
-npm run correct
-npm run release
-```
-
 直すのは次の値だけです。
 
 | 列 | 直す値 | 扱い |
@@ -94,6 +69,11 @@ jp-healthcare-osm は、これが用途を制限しない OpenStreetMap のラ�
 |---|---|
 | `<業態>_geocoded.csv` | jp-healthcare-osm の座標の判定の結果 |
 | `chiban_points.csv` | 地番の点（業態、ID、緯度、経度） |
+
+## 都道府県ごとのデータのダウンロード
+
+都道府県ごとのZIPファイルを、GitHubの[Releases](https://github.com/nyampire/iryo-joho-net-corrected/releases)に置いています。
+ファイルの選び方と中身は、[DOWNLOAD.md](DOWNLOAD.md)にあります。
 
 ## ライセンスと出典
 
