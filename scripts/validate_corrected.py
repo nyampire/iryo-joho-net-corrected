@@ -15,6 +15,8 @@ build_corrected.py と corrected_rules.py の関数は使わない。
   値が変わった時刻のセルは空欄になっている
   値が1つも変わっていない行と見出しは、元データのレコード文字列に「,」と追加した列が
     続く形になっている（引用符の付け方まで元データと同じ）
+  値が変わった行は、変わっていないセルが引用符まで元データと同じ文字列で、
+    値が変わったセルは引用符の有無が元データと同じ
   0.0 の座標と、開始と終了が同じ区間が残っていない
   座標の出典 の値が決まった語のどれかで、座標の有無と食い違わない
   座標の出典 が 原データ の行は、座標が元データと同じ
@@ -83,6 +85,35 @@ def records(f):
         yield buf.rstrip("\r\n")
 
 
+def raw_fields(rec):
+    """レコード文字列を、引用符を付けたまま1セルずつの文字列に分ける。"""
+    fields, buf, quoted = [], "", False
+    for ch in rec:
+        if ch == '"':
+            quoted = not quoted
+        elif ch == "," and not quoted:
+            fields.append(buf)
+            buf = ""
+            continue
+        buf += ch
+    fields.append(buf)
+    return fields
+
+
+def check_changed_format(name, fid, raw_rec, out_rec, n_cols, changed, problems):
+    """値が変わった行の、セルごとの書かれ方を元データと比べる。"""
+    rf, of = raw_fields(raw_rec), raw_fields(out_rec)
+    for i in range(n_cols):
+        if i in changed:
+            same = rf[i].startswith('"') == of[i].startswith('"')
+        else:
+            same = rf[i] == of[i]
+        if not same:
+            problems.add(name, "値が変わった行の書式が元データと違う",
+                         f"{fid} {i + 1} 列目 {rf[i]} / {of[i]}")
+            return
+
+
 class Problems:
     def __init__(self):
         self.lines = []
@@ -133,6 +164,8 @@ def check_file(raw_path, out_path, bbox, problems):
             changed = [i for i in range(len(rh)) if raw[i] != out[i]]
             if not changed and not out_rec.startswith(raw_rec + ","):
                 problems.add(name, "変わっていない行の書式が元データと違う", raw[0])
+            if changed:
+                check_changed_format(name, raw[0], raw_rec, out_rec, len(rh), set(changed), problems)
             for i in changed:
                 col = rh[i]
                 if not editable(col):
